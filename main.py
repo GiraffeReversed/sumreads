@@ -5,6 +5,7 @@ from tqdm import tqdm
 import math
 import json
 import nltk
+from nltk.sentiment import SentimentIntensityAnalyzer
 import matplotlib as mpl
 import matplotlib.cm as cm
 from wordcloud import WordCloud
@@ -28,7 +29,8 @@ def get_ids():
 
 
 def word_to_color(word, *args, **kwargs):
-    sentiment = doc.vocab[word].sentiment
+    sia = SentimentIntensityAnalyzer()
+    sentiment = sia.polarity_scores(word)["compound"]
 
     norm = mpl.colors.Normalize(vmin=-0.8, vmax=0.8)
     cmap = cm.RdYlGn
