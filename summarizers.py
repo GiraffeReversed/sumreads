@@ -11,9 +11,8 @@ import en_core_web_md
 
 def frequent_ngrams(words, n):
     stopwords = nltk.corpus.stopwords.words("english")
-    ngrams = ngrams(words, n)
     filtered_ngrams = [
-        ngram for ngram in ngrams
+        ngram for ngram in ngrams(words, n)
         if all(gram.lower() not in stopwords and gram.isalnum() for gram in ngram)
     ]
     return nltk.FreqDist(filtered_ngrams)
@@ -46,7 +45,7 @@ def frequent_arbitrarygrams(words, min_, max_, count):
 def sentimental_words(lemmatized, total, treshold):
     sia = SentimentIntensityAnalyzer()
     fd = nltk.FreqDist(lemmatized)
-    
+
     result = []
     for val, freq in fd.most_common():
         scores = sia.polarity_scores(val)
@@ -69,7 +68,7 @@ def _is_word_aware_infix(needle, haystack, unsquishables):
     haystack = re.split("[^a-zA-Z]+", haystack.lower())
     for i in range(len(haystack) - len(needle) + 1):
         if needle == haystack[i:i+len(needle)] and _no_unsquishables(needle, haystack, unsquishables):
-            return True        
+            return True
     return False
 
 
@@ -95,16 +94,17 @@ def _propagate(mapping):
 
 def squish(values, unsquishables=set(), unremapables=set()):
     unprocessed = set(values)
-    mapping = {val:val for val in values}
+    mapping = {val: val for val in values}
 
     for val in values:
         if val not in unprocessed:
             continue
         for con in _contained_in(val, unprocessed, unsquishables):
-            if not any(_is_word_aware_infix(con, word, unsquishables) for word in unremapables) or con.lower() == val.lower():
+            if not any(_is_word_aware_infix(con, word, unsquishables) for word in unremapables) \
+                    or con.lower() == val.lower():
                 mapping[con] = val
             unprocessed.remove(con)
-        
+
     return _propagate(mapping)
 
 
@@ -128,7 +128,7 @@ def _get_dependent(token, dependencies, passthroughs=[], deep=False, result=None
             result.append(child)
         if deep or child.dep_ in passthroughs:
             _get_dependent(child, dependencies, passthroughs, deep, result)
-    
+
     return result
 
 
@@ -187,14 +187,14 @@ def _get_description_from_aux(token, aux):
         if len(whats) > 1:
             result.append(whats)
             break
-        
+
         what = whats[0]
         mods = _get_mods(what, aux)
         desc = sorted(negs + mods + [what], key=lambda tok: tok.i)
         result.append(desc)
-    
+
         whats = _get_dependent(what, ["conj"])
-    
+
     return result
 
 
@@ -238,7 +238,7 @@ def get_character_descriptions(people, names_mapping, verbose=0):
         word = person.root
         descs = _get_descriptions(word)
         _add_descriptions(i, word, descs, names_mapping[person.text], result, verbose)
-    
+
     return result
 
 
@@ -286,7 +286,7 @@ def _get_described_entity_from_subject(mod):
     parent = mod.head
     while parent.text.strip() and parent.dep_ in ["amod", "compound", "advmod"]:
         parent = parent.head
-    
+
     if parent.pos_ == "AUX":
         subjs = _get_dependent(parent, ["nsubj"])
         if len(subjs) == 1 and subjs[0].pos_ not in ("PROP", "PRON", "PUNCT", "SCONJ"):
@@ -310,20 +310,22 @@ def get_sentimental_descriptions(doc, sent_threshold, verbose=0):
 
         if word.pos_.startswith("V"):
             descs.extend(_get_descriptions_from_object(word))
-            
+
         descs.extend(_get_described_entity_from_mod(word))
         descs.extend(_get_described_entity_from_subject(word))
-        
+
         _add_descriptions(i, word, descs, key, result, verbose)
 
     return result
 
 
-def get_book_descriptions(text, aspects, sent_threshold, title, series):
+def get_book_descriptions(book_id, text, ent_count, aspects, sent_threshold, title, series, force_rebuild=False):
     nlp = en_core_web_md.load()
     nlp.max_length = len(text)
 
     doc = nlp(text)
+    compute_vocab_sentiment(doc)
+
     ents = [ent for ent in doc.ents if ent.label_ in ["PERSON", "WORK_OF_ART"]]
 
     names_mapping = squish_ents(ents, count=ent_count, unremapables={title, series})
