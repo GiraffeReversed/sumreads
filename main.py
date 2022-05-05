@@ -2,59 +2,20 @@
 # coding: utf-8
 
 from tqdm import tqdm
-import json
 import math
-import spacy
-from spacy import displacy
-import en_core_web_md
+import json
+import nltk
 import matplotlib as mpl
 import matplotlib.cm as cm
-from nltk.stem import WordNetLemmatizer
-import nltk
-
-from summarizers import frequent_arbitrarygrams
-from summarizers import sentimental_words
-from summarizers import squish_ents
-from summarizers import compute_vocab_sentiment
-from summarizers import get_character_descriptions
-from summarizers import get_aspect_descriptions
-from summarizers import get_sentimental_descriptions
-
+from wordcloud import WordCloud
+import matplotlib.pyplot as plt
+from summarizers import get_book_descriptions
+from batch_processor import get_reviews_text
 
 FILTER_SPOILERS = True
-
-
-def find_book(book_id):
-    with open("data/goodreads_books_fantasy_paranormal.json") as f:
-        for line in tqdm(f):
-            book = json.loads(line)
-            if book["book_id"] == book_id:
-                return book
-    return None
-
-
-def get_book_and_series(book_id):
-    book = find_book(book_id)
-    if book is None:
-        return "", ""
-
-    title = book["title"].split("(", 1)[0]
-    series = book["title"].split("(", 1)[1].rstrip("0123456789#), ")
-    return title if title else "", series if series else ""
-
-
-def get_reviews_from_book_id(book_id):
-    reviews = []
-    with open("data/goodreads_reviews_fantasy_paranormal.json") as f:
-        for line in tqdm(f):
-            review = json.loads(line)
-            if review["book_id"] == book_id:
-                reviews.append(review)
-    return reviews
-
-
-def filter_spoilerous(reviews):
-    return [review for review in reviews if "spoiler" not in review["review_text"]]
+ASPECTS = ["book", "story", "writing", "characters", "pacing"]
+SENT_THRESHOLD = 0.6
+ENT_COUNT = 20
 
 
 def get_ids():
@@ -84,11 +45,8 @@ def print_descriptions(descs, min_descs=15, extra_stopwords=set()):
         if len(descs) < min_descs:
             continue
 
-        print(key, len(descs), end=" ")
+        print(key, len(descs))
 
-        from wordcloud import WordCloud
-        import matplotlib.pyplot as plt
-    
         wordcloud = WordCloud(
             width=1200,
             height=600,
@@ -99,60 +57,32 @@ def print_descriptions(descs, min_descs=15, extra_stopwords=set()):
         plt.imshow(wordcloud, interpolation='bilinear')
         plt.axis("off")
         plt.show()
-        
+
         print(*sorted(set(descs), key=len, reverse=True)[:int(math.log(len(descs), 2))], sep="\n")
         print()
 
 
 if __name__ == "__main__":
-    book_id = "41865"
+    book_id = "64216"
     # harry potter and the sorcerer's stone = 3
     # twilight = 41865
     # the expanse = 8855321
     # eric = 64218
     # guards guards = 64216
+    # eidolon = 25056040
 
-    title, series = get_book_and_series(book_id)
+    print("function started")
+    text, title, series = get_reviews_text(book_id, FILTER_SPOILERS)
     print(title)
     print(series)
-
-    reviews = get_reviews_from_book_id(book_id)
-    print(len(reviews))
-
-    if FILTER_SPOILERS:
-        reviews = filter_spoilerous(reviews)
-        print(len(reviews))
-
-    text = " ".join(review["review_text"] for review in reviews)
-
-    lemmatizer = WordNetLemmatizer()
-    lemmatized = [
-        lemmatizer.lemmatize(word, pos.lower()[0] if pos.lower()[0] in "nvars" else "n").lower()
-        for word, pos in nltk.pos_tag(nltk.word_tokenize(text))
-    ]
-
-    print(frequent_arbitrarygrams(lemmatized, 2, 6, 3))
-    print(sentimental_words(lemmatized, 20, 0.5))
-
-    nlp = en_core_web_md.load()
-    nlp.max_length = len(text)
-
 
     print("chars", len(text))
     print("words", len(text.split()))
 
+    result = get_book_descriptions(book_id, text, ENT_COUNT, ASPECTS, SENT_THRESHOLD, title, series)
+    names_mapping, character_descriptions, aspect_descriptions, sentimental_descriptions, doc = result
 
-    doc = nlp(text)
-    ents = [ent for ent in doc.ents if ent.label_ in ["PERSON", "WORK_OF_ART"]]
-
-
-    names_mapping = squish_ents(ents, unremapables={title, series})
     print(names_mapping)
-
-    compute_vocab_sentiment(doc)
-
-    character_descriptions = get_character_descriptions(ents, names_mapping)
-    aspect_descriptions = get_aspect_descriptions(doc, ["book", "story", "writing", "characters", "pacing"])
 
     extra_stopwords = {
         "character", "characters", "writer", "author", "one", "first", "second", "last"
@@ -163,24 +93,39 @@ if __name__ == "__main__":
     print_descriptions(character_descriptions, min_descs=10, extra_stopwords=extra_stopwords)
     print_descriptions(aspect_descriptions, min_descs=10, extra_stopwords=extra_stopwords)
 
-    sentimental_descriptions = get_sentimental_descriptions(doc, 0.6)
-
     forbidden_sentimentals = {
         "thing", "things", "one", "way", "part", "deal", "job", "first",
         "book", "books", "serie", "series", "story", "stories", "read",
         "literature"
     }
-    print_descriptions(sentimental_descriptions, min_descs=10, extra_stopwords=forbidden_sentimentals)
+    print_descriptions(sentimental_descriptions, min_descs=20, extra_stopwords=forbidden_sentimentals)
 
+    character_desc_count = sum(len(word_descs[1]) for word_descs in character_descriptions.items())
+    aspect_desc_count = sum(len(word_descs[1]) for word_descs in aspect_descriptions.items())
+    sentimental_desc_count = sum(len(word_descs[1]) for word_descs in sentimental_descriptions.items())
 
-    print("characters", sum(len(foo[1]) for foo in character_descriptions.items()))
-    print("aspects", sum(len(foo[1]) for foo in aspect_descriptions.items()))
-    print("sentimental", sum(len(foo[1]) for foo in sentimental_descriptions.items()))
+    print("characters", character_desc_count)
+    print("aspects", aspect_desc_count)
+    print("sentimental", sentimental_desc_count)
     print("total", len(list(doc.sents)))
     print()
 
-    sum_ = sum(len(foo[1]) for foo in character_descriptions.items()) + sum(len(foo[1]) for foo in aspect_descriptions.items()) + sum(len(foo[1]) for foo in sentimental_descriptions.items())
-
+    sum_ = character_desc_count + aspect_desc_count + sentimental_desc_count
     total = len(list(doc.sents))
 
     print("percentage", f"{sum_ / total * 100:.2f} %")
+
+    count = 0
+    unique_descs = 0
+    word_descs = 0
+    for descss in [character_descriptions, aspect_descriptions, sentimental_descriptions]:
+        for key, descs in descss.items():
+            count = len(descs)
+            unique_descs += len(set(" ".join(w.text for w in desc) for desc in descs))
+            word_descs += sum(len(desc) for desc in descs)
+
+    print("count", count)
+    print("unique_descs", unique_descs)
+    print("word_descs", word_descs)
+
+    print(len(doc))
