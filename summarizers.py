@@ -6,6 +6,7 @@ import re
 import nltk
 from nltk.sentiment import SentimentIntensityAnalyzer
 from nltk.util import ngrams
+import en_core_web_md
 
 
 def frequent_ngrams(words, n):
@@ -107,7 +108,7 @@ def squish(values, unsquishables=set(), unremapables=set()):
     return _propagate(mapping)
 
 
-def squish_ents(people, count=20, unremapables=set()):
+def squish_ents(people, count, unremapables=set()):
     fdp = nltk.FreqDist(ent.text for ent in people)
     names = [p[0] for p in fdp.most_common(count)]
     return squish(names, unremapables=unremapables)
@@ -316,3 +317,19 @@ def get_sentimental_descriptions(doc, sent_threshold, verbose=0):
         _add_descriptions(i, word, descs, key, result, verbose)
 
     return result
+
+
+def get_book_descriptions(text, aspects, sent_threshold, title, series):
+    nlp = en_core_web_md.load()
+    nlp.max_length = len(text)
+
+    doc = nlp(text)
+    ents = [ent for ent in doc.ents if ent.label_ in ["PERSON", "WORK_OF_ART"]]
+
+    names_mapping = squish_ents(ents, count=ent_count, unremapables={title, series})
+
+    character_descriptions = get_character_descriptions(ents, names_mapping)
+    aspect_descriptions = get_aspect_descriptions(doc, aspects)
+    sentimental_descriptions = get_sentimental_descriptions(doc, sent_threshold)
+
+    return names_mapping, character_descriptions, aspect_descriptions, sentimental_descriptions, doc
