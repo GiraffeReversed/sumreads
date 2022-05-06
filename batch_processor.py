@@ -193,8 +193,8 @@ def get_book_ids():
     return result
 
 
-def create_summaries():
-    for book_id in tqdm(get_book_ids()):
+def create_summaries(from_=0, to_=2*10**6):
+    for book_id in tqdm(get_book_ids()[from_:to_]):
         create_summary(book_id, force_rebuild=False)
 
 
@@ -224,5 +224,5 @@ if __name__ == "__main__":
     # prepare_split_folders(SUMMARY_FOLDER)
     # print("summary folders created...")
 
-    create_summaries()
+    create_summaries(150000, 200000)
     pass
