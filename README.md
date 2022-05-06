@@ -12,4 +12,4 @@ After that, download the review data for you relevant genres and ungz them to th
 
 ### Use
 
-The most convenient way to use is the provided Jupyter Notebook `interpretable_summarization.ipynb`. As of now, you have to manually set id of the book (first number in the goodreads book's url). Possible summarizations are all used in the notebook and you can tweak the constants to your liking.
+The most convenient way to use is the provided Jupyter Notebook `interpretable_summarizers.ipynb`. As of now, you have to manually set id of the book (first number in the goodreads book's url). Possible summarizations are all used in the notebook and you can tweak the constants to your liking.
