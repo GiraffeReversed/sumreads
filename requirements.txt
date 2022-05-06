@@ -1,0 +1,6 @@
+tqdm
+nltk
+matplotlib
+wordcloud
+pycld2
+spacy
