@@ -92,20 +92,40 @@ def _propagate(mapping):
     return mapping
 
 
+def can_map(from_, to_bucket, unsquishables, unremapables):
+    if not any(_is_word_aware_infix(from_, to_, unsquishables) for to_ in to_bucket):
+        return False
+
+    if any(from_.lower() == to_.lower() for to_ in to_bucket):
+        return True
+
+    for to_ in to_bucket:
+        if any(_is_word_aware_infix(to_, ur, unsquishables) for ur in unremapables):
+            return False
+    return True
+
+
+def add_or_create_bucket(val, buckets, unsquishables, unremapables):
+    for bucket in buckets:
+        if can_map(val, bucket, unsquishables, unremapables):
+            bucket.add(val)
+            return
+    buckets.append({val})
+
+
 def squish(values, unsquishables=set(), unremapables=set()):
-    unprocessed = set(values)
-    mapping = {val: val for val in values}
+    buckets = []
+    values_sorted = sorted(values, key=len, reverse=True)
+    for val in values_sorted:
+        add_or_create_bucket(val, buckets, unsquishables, unremapables)
 
-    for val in values:
-        if val not in unprocessed:
-            continue
-        for con in _contained_in(val, unprocessed, unsquishables):
-            if not any(_is_word_aware_infix(con, word, unsquishables) for word in unremapables) \
-                    or con.lower() == val.lower():
-                mapping[con] = val
-            unprocessed.remove(con)
+    mapping = {}
+    for bucket in buckets:
+        representant = min(bucket, key=lambda b: (0 if b.count(" ") == 1 else 1, 0 if b != b.lower() else 1, len(b)))
+        for val in bucket:
+            mapping[val] = representant
 
-    return _propagate(mapping)
+    return mapping
 
 
 def squish_ents(people, count, unremapables=set()):
@@ -245,10 +265,10 @@ def get_character_descriptions(people, names_mapping, verbose=0):
 def get_aspect_descriptions(doc, aspects, verbose=0):
     result = {}
     for i, word in enumerate(doc):
-        if word.text not in aspects:
+        if word.lemma_ not in aspects:
             continue
         descs = _get_descriptions(word)
-        _add_descriptions(i, word, descs, word.text, result, verbose)
+        _add_descriptions(i, word, descs, word.lemma_, result, verbose)
 
     return result
 
