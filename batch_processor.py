@@ -14,7 +14,8 @@ SUMMARY_FOLDER = "summaries"
 SPLIT_FOLDERS = 10 ** 3
 
 FILTER_SPOILERS = True
-ASPECTS = ["book", "story", "writing", "characters", "pacing"]
+ASPECTS = ["book", "story", "writing", "plot", "character",
+           "protagonist", "relationship", "dialogue", "action", "pacing"]
 SENT_THRESHOLD = 0.6
 ENT_COUNT = 20
 
@@ -149,7 +150,7 @@ def get_reviews_text(book_id, no_spoilerous, genre):
 
 
 def token_desc_to_str(desc):
-    return " ".join(w.text for w in desc).lower().replace(" '", "'").replace("n't", "not")
+    return " ".join(w.text if w.ent_type_ else w.text.lower() for w in desc).replace(" 's", "'s").replace("n't", "not")
 
 
 def serialize_descriptions(descss):
@@ -180,7 +181,8 @@ def create_summary(book_id, force_rebuild=True):
             "aspects": serialize_descriptions(aspect_descriptions),
             "sentimental": serialize_descriptions(sentimental_descriptions),
             "words_count": len(doc),
-            "sents_count": len(list(doc.sents))
+            "sents_count": len(list(doc.sents)),
+            "version": 1
         }))
 
 
@@ -193,9 +195,14 @@ def get_book_ids():
     return result
 
 
-def create_summaries(from_=0, to_=2*10**6):
+def create_summaries(from_=0, to_=2*10**6, min_review_size=100000, all_nonexistent=False, force_rebuild=False):
     for book_id in tqdm(get_book_ids()[from_:to_]):
-        create_summary(book_id, force_rebuild=False)
+        reviews_path = get_reviews_path(book_id)
+        summary_path = get_summary_path(book_id)
+        if (all_nonexistent and not exists(summary_path)):
+            create_summary(book_id, force_rebuild=force_rebuild)
+        elif os.path.getsize(reviews_path) > min_review_size:
+            create_summary(book_id, force_rebuild=force_rebuild)
 
 
 def get_filename(type_, genre):
@@ -205,6 +212,19 @@ def get_filename(type_, genre):
 def prepare_split_folders(folder):
     for i in range(SPLIT_FOLDERS):
         os.makedirs(join(folder, str(i)), exist_ok=True)
+
+
+def get_summary(book_id, force_rebuild=False):
+    reviews_path = get_reviews_path(book_id)
+    summary_path = get_summary_path(book_id)
+    if not exists(reviews_path):
+        print("no such book")
+        return
+    if not exists(summary_path) or force_rebuild:
+        create_summary(book_id, force_rebuild=force_rebuild)
+
+    with open(summary_path) as f:
+        return json.loads(f.read())
 
 
 if __name__ == "__main__":
