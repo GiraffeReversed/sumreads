@@ -43,7 +43,7 @@ def word_to_color(word, *args, **kwargs):
 def print_descriptions(descs, min_descs=15, extra_stopwords=set()):
     forbidden = set(nltk.corpus.stopwords.words("english")) | extra_stopwords | descs.keys()
     for key, descs in sorted(descs.items(), key=lambda pair: len(pair[1]), reverse=True):
-        descs = [" ".join(word.text if word.text != "n't" else "not" for word in desc).lower() for desc in descs]
+        # descs = [" ".join(word.text if word.text != "n't" else "not" for word in desc).lower() for desc in descs]
         if len(descs) < min_descs:
             continue
 
@@ -56,6 +56,7 @@ def print_descriptions(descs, min_descs=15, extra_stopwords=set()):
             collocation_threshold=10,
             color_func=word_to_color
         ).generate(" ".join(descs))
+        plt.figure(figsize=(8, 6), dpi=200)
         plt.imshow(wordcloud, interpolation='bilinear')
         plt.axis("off")
         plt.show()
